@@ -58,9 +58,6 @@ export const CONSTITUTION = [
   "Keeper bonds: 2 GEN to create an hour, 1 GEN to settle it. An empty book slashes the create bond.",
 ];
 
-export function laneById(id: LaneId | string): Lane {
+export function laneById(id: string): Lane {
   return LANES.find((l) => l.id === id) ?? LANES[0]!;
 }
-
-export type { LaneId } from "./types";
-import type { LaneId } from "./types";
