@@ -5,14 +5,14 @@ comparable instruments race each completed UTC hour, and validators
 independently fetch three locked venues to agree on which one led.
 
 **Live**: https://hourglass-insights.vercel.app
-**Protocol/contract**: [Desktop/primacy](../primacy) (this repo is the
-frontend only — see that repo's README for the contract, tests, and
-docs).
+**Protocol/contract**: [Fortune9thx/primacy](https://github.com/Fortune9thx/primacy)
+(this repo is the frontend only — see that repo's README for the
+contract, tests, and docs).
 **Contract address**: not deployed yet. Studio Dev is currently unable
 to load any contract over ~305 bytes — see
-[`../primacy/docs/STATUS.md`](../primacy/docs/STATUS.md) for the full
-diagnosis. The UI is live and fully wired; it is honestly empty until a
-contract address is set.
+[`docs/STATUS.md`](https://github.com/Fortune9thx/primacy/blob/main/docs/STATUS.md)
+in the protocol repo for the full diagnosis. The UI is live and fully
+wired; it is honestly empty until a contract address is set.
 
 ## What this is
 
@@ -20,10 +20,10 @@ PRIMACY settles one question: *which of three comparable instruments had
 the highest completed-hour return, across three locked public venues?*
 Every instrument is a USDT-M index return over a completed UTC hour —
 never a stock, never NYSE. See
-[`../primacy/docs/architecture.md`](../primacy/docs/architecture.md) for
-how settlement actually reaches consensus (validators independently
-re-fetch Binance/Bitget/Gate and derive their own answer; nothing is
-trusted from a single caller's claim).
+[`docs/architecture.md`](https://github.com/Fortune9thx/primacy/blob/main/docs/architecture.md)
+in the protocol repo for how settlement actually reaches consensus
+(validators independently re-fetch Binance/Bitget/Gate and derive their
+own answer; nothing is trusted from a single caller's claim).
 
 ## This app is a live product, not a demo
 
@@ -60,9 +60,10 @@ bun run dev
 ```
 
 Copy `.env.example` to `.env` and set `VITE_CONTRACT_ADDRESS` once
-Primacy is actually deployed (see `../primacy/deploy/deployments.json`
-for the real address once one exists). Leave it unset to develop
-against the honest "not deployed" empty state.
+Primacy is actually deployed (see
+[`deploy/deployments.json`](https://github.com/Fortune9thx/primacy/blob/main/deploy/deployments.json)
+in the protocol repo for the real address once one exists). Leave it
+unset to develop against the honest "not deployed" empty state.
 
 ```bash
 bun run build      # production build, also used by Vercel
