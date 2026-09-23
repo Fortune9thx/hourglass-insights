@@ -7,22 +7,24 @@
  * the canonical contract API this wraps. Do not copy Primacy.py itself
  * into this frontend; this module only calls it over RPC.
  *
- * Behavior:
- * - No contract address configured, or the configured address has no
- *   deployed code -> every read serves mock.ts data; every write throws
- *   a stated PrimacyError. AppShell's DemoBanner reflects this.
- * - Contract configured and reachable -> reads/writes go through
- *   genlayer-js against Studio Next (chain 61997).
- * - Contract configured but RPC/read fails (e.g. Studio Dev reset) ->
- *   falls back to the last-known mock data rather than throwing, so the
- *   UI stays populated; callers can inspect `primacy.lastReadError` to
- *   show a "Studio Next may have reset" banner.
+ * PRIMACY is a live product, not a demo. There is no mock/fixture data
+ * anywhere in this module:
+ * - No `VITE_CONTRACT_ADDRESS` configured -> every list read resolves to
+ *   `[]`, every single-record read resolves to `null`, every write
+ *   throws. Nothing is invented to fill the gap.
+ * - An address is configured -> every read/write goes through
+ *   genlayer-js against Studio Next (chain 61997), for real. A failed
+ *   RPC call throws (or, for list reads, resolves to `[]`) -- it never
+ *   falls back to fabricated data.
+ * - `checkLiveStatus()` is the single source of truth for whether the
+ *   configured address actually has code on-chain right now (a real
+ *   `eth_getCode` call, not just "an address string is set") -- see
+ *   AppShell's `useLiveStatus()` for how the UI consumes this.
  */
 import { createClient } from "genlayer-js";
 import { studioDevnet } from "genlayer-js/chains";
-import { CONTRACT_ADDRESS, CONTRACT_LANE_ID, HAS_CONTRACT, UI_LANE_ID } from "./config";
+import { CHAIN_ID, CONTRACT_ADDRESS, CONTRACT_LANE_ID, HAS_CONTRACT, UI_LANE_ID } from "./config";
 import { getInjectedProvider } from "./useWallet";
-import { MOCK_ACTIVITY, MOCK_MARKETS, MOCK_POSITIONS, MOCK_STATS } from "./mock";
 import type {
   ActivityEvent,
   BettingState,
@@ -61,13 +63,12 @@ function requireContractAddress(): ContractAddress {
 
 export interface TxResult {
   hash: string;
-  status: "wallet" | "submitted" | "accepted" | "finalized";
+  status: "accepted" | "finalized";
 }
 
 export class PrimacyError extends Error {}
 
-const NO_CONTRACT =
-  "Contract address is not set. Deploy to Studio Next and set VITE_CONTRACT_ADDRESS.";
+const NO_CONTRACT = "Contract not deployed on Studio Next (61997).";
 
 const VENUE_SOURCES: Record<string, string> = {
   binance: "https://www.binance.com",
@@ -107,11 +108,6 @@ function describePrimacyError(raw: string): string {
   return raw;
 }
 
-async function delay<T>(value: T, ms = 220): Promise<T> {
-  await new Promise((r) => setTimeout(r, ms));
-  return value;
-}
-
 // ---------------------------------------------------------------------------
 // genlayer-js clients
 // ---------------------------------------------------------------------------
@@ -141,12 +137,17 @@ async function getWriteClient() {
 async function readView<T>(functionName: string, kwargs: Kwargs = {}): Promise<T> {
   const address = requireContractAddress();
   const client = getReadClient();
-  return client.readContract({
-    address,
-    functionName,
-    args: [],
-    kwargs,
-  }) as Promise<T>;
+  try {
+    return (await client.readContract({
+      address,
+      functionName,
+      args: [],
+      kwargs,
+    })) as T;
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err);
+    throw new PrimacyError(describePrimacyError(raw));
+  }
 }
 
 type PrimacyTransaction = Awaited<ReturnType<PrimacyGenLayerClient["getTransaction"]>>;
@@ -208,6 +209,34 @@ async function writeContract(
 }
 
 // ---------------------------------------------------------------------------
+// liveness -- the single source of truth for "is there really a working
+// contract at this address right now," not just "is an address configured"
+// ---------------------------------------------------------------------------
+
+export type LiveStatus = "not_deployed" | "no_code" | "rpc_down" | "live";
+
+export async function checkLiveStatus(): Promise<LiveStatus> {
+  if (!CONTRACT_ADDRESS) return "not_deployed";
+  try {
+    const client = getReadClient();
+    // eth_getCode is a real, confirmed-working method on Studio Dev's RPC
+    // (verified directly via curl), but genlayer-js@2.0.0-rc.1's `request`
+    // overloads only enumerate its own gen_/sim_ methods plus a handful of
+    // viem standard ones -- eth_getCode isn't among them in the .d.ts even
+    // though the server supports it. Cast through `never` rather than
+    // pretending it fits one of the declared overloads.
+    const request = client.request as (args: {
+      method: "eth_getCode";
+      params: [string, string];
+    }) => Promise<string>;
+    const code = await request({ method: "eth_getCode", params: [CONTRACT_ADDRESS, "latest"] });
+    return code && code !== "0x" ? "live" : "no_code";
+  } catch {
+    return "rpc_down";
+  }
+}
+
+// ---------------------------------------------------------------------------
 // wei <-> GEN (display-only; the contract is the source of truth for
 // exact amounts)
 // ---------------------------------------------------------------------------
@@ -224,7 +253,7 @@ function genToWeiBigInt(gen: number): bigint {
 }
 
 // ---------------------------------------------------------------------------
-// raw contract shape -> UI domain types (types.ts, shared with mock.ts)
+// raw contract shape -> UI domain types (types.ts)
 // ---------------------------------------------------------------------------
 
 interface RawMarket {
@@ -324,27 +353,21 @@ function estimatePayout(
 
 export const primacy = {
   contractAddress: CONTRACT_ADDRESS,
-  isLive: HAS_CONTRACT,
+  chainId: CHAIN_ID,
+  checkLiveStatus,
 
   async getStats(): Promise<BoardStats> {
-    if (!HAS_CONTRACT) return delay(MOCK_STATS);
-    try {
-      const board = await this.getBoard();
-      const genInPlay = Number(board.reduce((s, m) => s + m.totalPool, 0).toFixed(2));
-      return {
-        genInPlay,
-        openHours: board.filter((m) => m.state === "OPEN").length,
-        settled24h: 0,
-        inconclusive24h: 0,
-        sparkline: MOCK_STATS.sparkline,
-      };
-    } catch {
-      return MOCK_STATS;
-    }
+    const board = await this.getBoard();
+    return {
+      genInPlay: Number(board.reduce((s, m) => s + m.totalPool, 0).toFixed(2)),
+      openHours: board.filter((m) => m.state === "OPEN").length,
+      settled24h: 0,
+      inconclusive24h: 0,
+      sparkline: [],
+    };
   },
 
   async getConstitution(): Promise<Constitution> {
-    if (!HAS_CONTRACT) throw new PrimacyError(NO_CONTRACT);
     const raw = await readView<Record<string, unknown>>("get_constitution");
     return {
       lanes: raw["lanes"] as Constitution["lanes"],
@@ -365,7 +388,6 @@ export const primacy = {
   },
 
   async getConfig(): Promise<ContractConfig> {
-    if (!HAS_CONTRACT) throw new PrimacyError(NO_CONTRACT);
     const raw = await readView<Record<string, unknown>>("get_config");
     return {
       treasury: raw["treasury"] as string,
@@ -375,67 +397,41 @@ export const primacy = {
   },
 
   async getBoard(): Promise<Market[]> {
-    if (!HAS_CONTRACT) {
-      return delay(MOCK_MARKETS.filter((m) => m.state === "OPEN" || m.state === "UPCOMING"));
-    }
-    try {
-      const raw = await readView<RawMarket[]>("get_board");
-      return raw.map((m) => mapMarket(m));
-    } catch {
-      return MOCK_MARKETS.filter((m) => m.state === "OPEN" || m.state === "UPCOMING");
-    }
+    if (!HAS_CONTRACT) return [];
+    const raw = await readView<RawMarket[]>("get_board");
+    return raw.map((m) => mapMarket(m));
   },
 
   async getMarkets(filter?: { lane?: LaneId | "all"; state?: string }): Promise<Market[]> {
-    if (!HAS_CONTRACT) {
-      let rows = MOCK_MARKETS;
-      if (filter?.lane && filter.lane !== "all") rows = rows.filter((m) => m.lane === filter.lane);
-      if (filter?.state && filter.state !== "All")
-        rows = rows.filter((m) => m.state === filter.state!.toUpperCase());
-      return delay(rows);
-    }
-    try {
-      const stateFilter =
-        filter?.state && filter.state !== "All" && filter.state !== "Upcoming"
-          ? filter.state.toUpperCase()
-          : "";
-      const raw = await readView<RawMarket[]>("get_markets", {
-        cursor: 0,
-        limit: 50,
-        state_filter: stateFilter,
-      });
-      let rows = raw.map((m) => mapMarket(m));
-      if (filter?.lane && filter.lane !== "all") rows = rows.filter((m) => m.lane === filter.lane);
-      return rows;
-    } catch {
-      let rows = MOCK_MARKETS;
-      if (filter?.lane && filter.lane !== "all") rows = rows.filter((m) => m.lane === filter.lane);
-      if (filter?.state && filter.state !== "All")
-        rows = rows.filter((m) => m.state === filter.state!.toUpperCase());
-      return rows;
-    }
+    if (!HAS_CONTRACT) return [];
+    const stateFilter =
+      filter?.state && filter.state !== "All" && filter.state !== "Upcoming"
+        ? filter.state.toUpperCase()
+        : "";
+    const raw = await readView<RawMarket[]>("get_markets", {
+      cursor: 0,
+      limit: 50,
+      state_filter: stateFilter,
+    });
+    let rows = raw.map((m) => mapMarket(m));
+    if (filter?.lane && filter.lane !== "all") rows = rows.filter((m) => m.lane === filter.lane);
+    return rows;
   },
 
   async getMarket(id: string): Promise<Market | null> {
-    if (!HAS_CONTRACT) return delay(MOCK_MARKETS.find((m) => m.id === id) ?? null);
-    try {
-      const [raw, evidence] = await Promise.all([
-        readView<RawMarket>("get_market", { market_id: Number(id) }),
-        this.getEvidence(id).catch(() => null),
-      ]);
-      return mapMarket(raw, evidence ?? undefined);
-    } catch {
-      return MOCK_MARKETS.find((m) => m.id === id) ?? null;
-    }
+    if (!HAS_CONTRACT) return null;
+    const [raw, evidence] = await Promise.all([
+      readView<RawMarket>("get_market", { market_id: Number(id) }),
+      this.getEvidence(id).catch(() => null),
+    ]);
+    return mapMarket(raw, evidence ?? undefined);
   },
 
   async getEvidence(marketId: string): Promise<RawEvidence> {
-    if (!HAS_CONTRACT) throw new PrimacyError(NO_CONTRACT);
     return readView<RawEvidence>("get_source_evidence", { market_id: Number(marketId) });
   },
 
   async getBettingState(marketId: string, address: string): Promise<BettingState> {
-    if (!HAS_CONTRACT) throw new PrimacyError(NO_CONTRACT);
     const raw = await readView<Record<string, unknown>>("get_betting_state", {
       market_id: Number(marketId),
       address,
@@ -450,54 +446,49 @@ export const primacy = {
   },
 
   async getUserPositions(address: string): Promise<Position[]> {
-    if (!HAS_CONTRACT) return delay(MOCK_POSITIONS);
-    try {
-      const raw = await readView<
-        {
-          market_id: number;
-          state: Position["state"];
-          symbol: string | null;
-          amount: string | number;
-          claimed: boolean;
-        }[]
-      >("get_user_positions", { address, cursor: 0, limit: 50 });
+    if (!HAS_CONTRACT) return [];
+    const raw = await readView<
+      {
+        market_id: number;
+        state: Position["state"];
+        symbol: string | null;
+        amount: string | number;
+        claimed: boolean;
+      }[]
+    >("get_user_positions", { address, cursor: 0, limit: 50 });
 
-      const withMarkets = await Promise.all(
-        raw
-          .filter((p) => p.symbol)
-          .map(async (p) => {
-            const market = await this.getMarket(String(p.market_id));
-            const stake = weiToGenNumber(p.amount);
-            const winningPool = market?.legs.find((l) => l.symbol === market.winner)?.pool ?? 0;
-            const payout =
-              market?.state === "INCONCLUSIVE"
-                ? stake
-                : market?.state === "SETTLED" && market.winner === p.symbol
-                  ? estimatePayout(stake, winningPool, market.totalPool, 200)
-                  : market?.state === "SETTLED"
-                    ? 0
-                    : null;
-            const position: Position = {
-              marketId: String(p.market_id),
-              lane: market?.lane ?? "crypto-equity-proxies",
-              startsAt: market?.startsAt ?? Date.now(),
-              symbol: p.symbol!,
-              stake,
-              state: p.state,
-              payout,
-              claimed: p.claimed,
-            };
-            return position;
-          }),
-      );
-      return withMarkets;
-    } catch {
-      return MOCK_POSITIONS;
-    }
+    return Promise.all(
+      raw
+        .filter((p) => p.symbol)
+        .map(async (p) => {
+          const market = await this.getMarket(String(p.market_id));
+          const stake = weiToGenNumber(p.amount);
+          const winningPool = market?.legs.find((l) => l.symbol === market.winner)?.pool ?? 0;
+          const payout =
+            market?.state === "INCONCLUSIVE"
+              ? stake
+              : market?.state === "SETTLED" && market.winner === p.symbol
+                ? estimatePayout(stake, winningPool, market.totalPool, 200)
+                : market?.state === "SETTLED"
+                  ? 0
+                  : null;
+          const position: Position = {
+            marketId: String(p.market_id),
+            lane: market?.lane ?? "crypto-equity-proxies",
+            startsAt: market?.startsAt ?? Date.now(),
+            symbol: p.symbol!,
+            stake,
+            state: p.state,
+            payout,
+            claimed: p.claimed,
+          };
+          return position;
+        }),
+    );
   },
 
   async getClaimable(address: string): Promise<Market[]> {
-    if (!HAS_CONTRACT) throw new PrimacyError(NO_CONTRACT);
+    if (!HAS_CONTRACT) return [];
     const raw = await readView<RawMarket[]>("get_claimable_markets", {
       address,
       cursor: 0,
@@ -507,35 +498,31 @@ export const primacy = {
   },
 
   async listActivity(): Promise<ActivityEvent[]> {
-    if (!HAS_CONTRACT) return delay([...MOCK_ACTIVITY].sort((a, b) => b.at - a.at));
+    if (!HAS_CONTRACT) return [];
     // Primacy.py has no dedicated activity log view -- derive a minimal
     // feed from settled/inconclusive board entries until a real indexer
-    // exists. Falls back to mock on any failure.
-    try {
-      const markets = await this.getMarkets({ state: "All" });
-      const events: ActivityEvent[] = markets
-        .filter((m) => m.state === "SETTLED" || m.state === "INCONCLUSIVE")
-        .map((m) => ({
-          id: `${m.id}-settle`,
-          at: m.endsAt,
-          marketId: m.id,
-          lane: m.lane,
-          action: m.state === "INCONCLUSIVE" ? "REFUND" : "SETTLE",
-          verdict:
-            m.state === "INCONCLUSIVE"
-              ? "Inconclusive — stakes returned"
-              : `${m.winner} led the hour`,
-          tx: "",
-          detail:
-            m.state === "SETTLED"
-              ? `${m.votes} venues named ${m.winner}.`
-              : "Venues disagreed or no symbol reached two votes. Every stake returned, no fee.",
-          votes: m.evidence.filter((e) => e.vote).map((e) => `${e.venue}: ${e.vote}`),
-        }));
-      return events.sort((a, b) => b.at - a.at);
-    } catch {
-      return [...MOCK_ACTIVITY].sort((a, b) => b.at - a.at);
-    }
+    // exists.
+    const markets = await this.getMarkets({ state: "All" });
+    const events: ActivityEvent[] = markets
+      .filter((m) => m.state === "SETTLED" || m.state === "INCONCLUSIVE")
+      .map((m) => ({
+        id: `${m.id}-settle`,
+        at: m.endsAt,
+        marketId: m.id,
+        lane: m.lane,
+        action: m.state === "INCONCLUSIVE" ? "REFUND" : "SETTLE",
+        verdict:
+          m.state === "INCONCLUSIVE"
+            ? "Inconclusive — stakes returned"
+            : `${m.winner} led the hour`,
+        tx: "",
+        detail:
+          m.state === "SETTLED"
+            ? `${m.votes} venues named ${m.winner}.`
+            : "Venues disagreed or no symbol reached two votes. Every stake returned, no fee.",
+        votes: m.evidence.filter((e) => e.vote).map((e) => `${e.venue}: ${e.vote}`),
+      }));
+    return events.sort((a, b) => b.at - a.at);
   },
 
   async createMarket(args: { lane: LaneId; startsAt: number }): Promise<TxResult> {

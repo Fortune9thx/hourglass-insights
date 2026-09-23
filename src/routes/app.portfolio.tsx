@@ -7,6 +7,7 @@ import { primacy } from "@/lib/primacy/client";
 import { HAS_CONTRACT, laneById } from "@/lib/primacy/config";
 import { gen, windowLabel } from "@/lib/primacy/format";
 import { useWallet } from "@/lib/primacy/useWallet";
+import { useWriteGate } from "@/lib/primacy/useWriteGate";
 
 export const Route = createFileRoute("/app/portfolio")({
   head: () => ({
@@ -25,6 +26,7 @@ export const Route = createFileRoute("/app/portfolio")({
 
 function Portfolio() {
   const wallet = useWallet();
+  const writeGate = useWriteGate();
   const queryClient = useQueryClient();
   const [err, setErr] = useState<string | null>(null);
 
@@ -82,13 +84,20 @@ function Portfolio() {
               </div>
             ))}
           </div>
+        ) : positions.isError ? (
+          <div className="flex min-h-[420px] flex-col items-center justify-center gap-2 px-6 text-center">
+            <p className="text-[15px] text-mute">Could not read positions from Studio Next.</p>
+            <p className="text-[13px] text-mute">
+              {positions.error instanceof Error ? positions.error.message : "Unknown error."}
+            </p>
+          </div>
         ) : !wallet.address && HAS_CONTRACT ? (
           <div className="flex min-h-[420px] flex-col items-center justify-center gap-4">
             <p className="text-[15px] text-mute">Connect a wallet to see your positions.</p>
           </div>
         ) : rows.length === 0 ? (
           <div className="flex min-h-[420px] flex-col items-center justify-center gap-4">
-            <p className="text-[15px] text-mute">No positions on Studio Next.</p>
+            <p className="text-[15px] text-mute">No positions on chain yet.</p>
             <Link to="/app">
               <Button>Open the board</Button>
             </Link>
@@ -126,10 +135,10 @@ function Portfolio() {
                       <Button
                         variant="outline"
                         className="h-9 px-4"
-                        disabled={!canClaim || !HAS_CONTRACT || claimMutation.isPending}
+                        disabled={!canClaim || !writeGate.canWrite || claimMutation.isPending}
                         reason={
-                          !HAS_CONTRACT
-                            ? "No contract set on Studio Next"
+                          !writeGate.canWrite
+                            ? writeGate.reason
                             : p.claimed
                               ? "Already claimed"
                               : "Nothing to claim on this hour"

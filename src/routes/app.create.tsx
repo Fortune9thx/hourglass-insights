@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/primacy/AppShell";
 import { Button, Card, SectionLabel } from "@/components/primacy/ui";
 import { MarketTicket } from "@/components/primacy/MarketTicket";
 import { primacy } from "@/lib/primacy/client";
-import { HAS_CONTRACT, LANES } from "@/lib/primacy/config";
+import { LANES } from "@/lib/primacy/config";
+import { useWriteGate } from "@/lib/primacy/useWriteGate";
 import type { LaneId, Market } from "@/lib/primacy/types";
 
 export const Route = createFileRoute("/app/create")({
@@ -33,17 +35,29 @@ function label(ts: number) {
 }
 
 function CreateHour() {
+  const writeGate = useWriteGate();
+  const queryClient = useQueryClient();
   const [lane, setLane] = useState<LaneId | null>(null);
   const [startsAt, setStartsAt] = useState<number | null>(null);
-  const [err, setErr] = useState<string | null>(null);
   const hours = useMemo(() => nextHours(12), []);
+
+  const createMutation = useMutation({
+    mutationFn: () => primacy.createMarket({ lane: lane!, startsAt: startsAt! }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["markets"] });
+      void queryClient.invalidateQueries({ queryKey: ["board"] });
+      void queryClient.invalidateQueries({ queryKey: ["stats"] });
+      setLane(null);
+      setStartsAt(null);
+    },
+  });
 
   const reason = !lane
     ? "Choose a lane"
     : !startsAt
       ? "Choose a UTC hour at least 30 minutes ahead"
-      : !HAS_CONTRACT
-        ? "Contract not set on Studio Next"
+      : !writeGate.canWrite
+        ? writeGate.reason
         : undefined;
 
   const preview: Market = {
@@ -112,20 +126,24 @@ function CreateHour() {
 
           <div className="mt-6 flex items-center gap-4">
             <Button
-              disabled={Boolean(reason)}
+              disabled={Boolean(reason) || createMutation.isPending}
               reason={reason}
-              onClick={() => {
-                setErr(null);
-                primacy
-                  .createMarket({ lane: lane!, startsAt: startsAt! })
-                  .catch((e: Error) => setErr(e.message));
-              }}
+              onClick={() => createMutation.mutate()}
             >
-              Create hour
+              {createMutation.isPending ? "Creating…" : "Create hour"}
             </Button>
             {reason ? <span className="text-[13px] text-mute">{reason}</span> : null}
           </div>
-          {err ? <p className="mt-3 text-[13px] text-down">{err}</p> : null}
+          {createMutation.isError ? (
+            <p className="mt-3 text-[13px] text-down">
+              {createMutation.error instanceof Error
+                ? createMutation.error.message
+                : "Create failed."}
+            </p>
+          ) : null}
+          {createMutation.isSuccess ? (
+            <p className="mt-3 text-[13px] text-up">Hour created. Check the board.</p>
+          ) : null}
         </Card>
 
         <div>

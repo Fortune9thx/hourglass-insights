@@ -40,9 +40,16 @@ function Activity() {
                 </div>
               ))}
             </div>
+          ) : q.isError ? (
+            <div className="flex min-h-[520px] flex-col items-center justify-center gap-2 px-6 text-center text-[15px] text-mute">
+              <p>Could not read activity from Studio Next.</p>
+              <p className="text-[13px]">
+                {q.error instanceof Error ? q.error.message : "Unknown error."}
+              </p>
+            </div>
           ) : rows.length === 0 ? (
             <div className="flex min-h-[520px] items-center justify-center text-[15px] text-mute">
-              No settlements recorded yet on Studio Next.
+              No settlements recorded yet.
             </div>
           ) : (
             <table className="w-full text-sm">

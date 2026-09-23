@@ -13,8 +13,9 @@ import {
   useNow,
 } from "@/components/primacy/ui";
 import { primacy } from "@/lib/primacy/client";
-import { HAS_CONTRACT, VENUES, laneById } from "@/lib/primacy/config";
+import { VENUES, laneById } from "@/lib/primacy/config";
 import { bps, countdown, gen, pct, windowLabel } from "@/lib/primacy/format";
+import { useWriteGate } from "@/lib/primacy/useWriteGate";
 
 export const Route = createFileRoute("/app/m/$id")({
   head: ({ params }) => ({
@@ -35,10 +36,10 @@ function Ticket() {
   const { id } = Route.useParams();
   const now = useNow();
   const queryClient = useQueryClient();
+  const writeGate = useWriteGate();
   const [venue, setVenue] = useState(VENUES[0]!.id);
   const [amount, setAmount] = useState("");
   const [side, setSide] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
 
   const q = useQuery({ queryKey: ["market", id], queryFn: () => primacy.getMarket(id) });
   const m = q.data;
@@ -46,24 +47,26 @@ function Ticket() {
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["market", id] });
     void queryClient.invalidateQueries({ queryKey: ["markets"] });
+    void queryClient.invalidateQueries({ queryKey: ["board"] });
+    void queryClient.invalidateQueries({ queryKey: ["stats"] });
   };
+
+  const betMutation = useMutation({
+    mutationFn: () => primacy.placeBet({ marketId: id, symbol: side!, amount: Number(amount) }),
+    onSuccess: () => {
+      setAmount("");
+      invalidate();
+    },
+  });
 
   const settleMutation = useMutation({
     mutationFn: () => primacy.settleMarket({ marketId: id }),
-    onSuccess: () => {
-      setErr(null);
-      invalidate();
-    },
-    onError: (e: Error) => setErr(e.message),
+    onSuccess: invalidate,
   });
 
   const reclaimMutation = useMutation({
     mutationFn: () => primacy.reclaimBonds({ marketId: id }),
-    onSuccess: () => {
-      setErr(null);
-      invalidate();
-    },
-    onError: (e: Error) => setErr(e.message),
+    onSuccess: invalidate,
   });
 
   if (q.isPending) {
@@ -86,14 +89,30 @@ function Ticket() {
     );
   }
 
+  if (q.isError) {
+    return (
+      <>
+        <PageHeader title="Could not load hour" />
+        <Card className="flex min-h-[320px] flex-col items-center justify-center gap-4">
+          <p className="text-[15px] text-mute">
+            {q.error instanceof Error
+              ? q.error.message
+              : "Could not read this hour from Studio Next."}
+          </p>
+          <Link to="/app">
+            <Button>Back to the board</Button>
+          </Link>
+        </Card>
+      </>
+    );
+  }
+
   if (!m) {
     return (
       <>
         <PageHeader title="Hour not found" />
         <Card className="flex min-h-[320px] flex-col items-center justify-center gap-4">
-          <p className="text-[15px] text-mute">
-            No hour with this id on Studio Next. State may have reset.
-          </p>
+          <p className="text-[15px] text-mute">No hour with this id on chain.</p>
           <Link to="/app">
             <Button>Back to the board</Button>
           </Link>
@@ -106,13 +125,12 @@ function Ticket() {
   const total = m.legs.reduce((s, l) => s + l.pool, 0) || 1;
   const started = now !== null && now >= m.startsAt;
   const expired = now !== null && now >= m.endsAt;
-  const bettingClosed =
-    started || m.state !== "UPCOMING" ? m.state !== "UPCOMING" && started : false;
-  const canBet = m.state === "OPEN" || m.state === "UPCOMING" ? !started : false;
+  const bettingClosed = m.state !== "OPEN" || started;
+  const canBet = m.state === "OPEN" && !started;
   const ev = m.evidence.find((e) => e.venue === venue);
 
-  const disabledReason = !HAS_CONTRACT
-    ? "Contract not set on Studio Next"
+  const betDisabledReason = !writeGate.canWrite
+    ? writeGate.reason
     : !canBet
       ? "Betting closed at the hour start"
       : !side
@@ -144,10 +162,8 @@ function Ticket() {
           expired && m.state === "OPEN" ? (
             <Button
               variant="accent"
-              disabled={!HAS_CONTRACT || settleMutation.isPending}
-              reason={
-                !HAS_CONTRACT ? "Contract not set on Studio Next" : "Posts a 1 GEN settle bond"
-              }
+              disabled={!writeGate.canWrite || settleMutation.isPending}
+              reason={writeGate.canWrite ? "Posts a 1 GEN settle bond" : writeGate.reason}
               onClick={() => settleMutation.mutate()}
             >
               {settleMutation.isPending ? "Settling…" : "Settle hour"}
@@ -155,10 +171,8 @@ function Ticket() {
           ) : m.state === "SETTLED" || m.state === "INCONCLUSIVE" ? (
             <Button
               variant="outline"
-              disabled={!HAS_CONTRACT || reclaimMutation.isPending}
-              reason={
-                !HAS_CONTRACT ? "Contract not set on Studio Next" : "Returns any bond owed to you"
-              }
+              disabled={!writeGate.canWrite || reclaimMutation.isPending}
+              reason={writeGate.canWrite ? "Returns any bond owed to you" : writeGate.reason}
               onClick={() => reclaimMutation.mutate()}
             >
               {reclaimMutation.isPending ? "Reclaiming…" : "Reclaim bonds"}
@@ -166,6 +180,19 @@ function Ticket() {
           ) : null
         }
       />
+
+      {settleMutation.isError ? (
+        <p className="mb-4 text-[13px] text-down">
+          {settleMutation.error instanceof Error ? settleMutation.error.message : "Settle failed."}
+        </p>
+      ) : null}
+      {reclaimMutation.isError ? (
+        <p className="mb-4 text-[13px] text-down">
+          {reclaimMutation.error instanceof Error
+            ? reclaimMutation.error.message
+            : "Reclaim failed."}
+        </p>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[58fr_42fr]">
         <Card>
@@ -234,19 +261,19 @@ function Ticket() {
             </select>
             <Button
               className="h-12"
-              disabled={Boolean(disabledReason)}
-              reason={disabledReason}
-              onClick={() => {
-                setErr(null);
-                primacy
-                  .placeBet({ marketId: m.id, symbol: side!, amount: Number(amount) })
-                  .catch((e: Error) => setErr(e.message));
-              }}
+              disabled={Boolean(betDisabledReason) || betMutation.isPending}
+              reason={betDisabledReason}
+              onClick={() => betMutation.mutate()}
             >
-              Place bet
+              {betMutation.isPending ? "Placing…" : "Place bet"}
             </Button>
           </div>
-          {err ? <p className="mt-3 text-[13px] text-down">{err}</p> : null}
+          {betMutation.isError ? (
+            <p className="mt-3 text-[13px] text-down">
+              {betMutation.error instanceof Error ? betMutation.error.message : "Bet failed."}
+            </p>
+          ) : null}
+          {betMutation.isSuccess ? <p className="mt-3 text-[13px] text-up">Bet placed.</p> : null}
           <p className="mt-3 text-[13px] text-mute">
             One symbol per wallet. Switching is rejected. Min 1 GEN. Betting closes at the hour
             start.
@@ -274,11 +301,8 @@ function Ticket() {
 
           {m.evidence.length === 0 ? (
             <div className="mt-6 space-y-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-9 w-full" />
-              ))}
               <p className="pt-2 text-[13px] text-mute">
-                Evidence appears after the first successful settle call.
+                No evidence yet. Evidence appears after the first successful settle call.
               </p>
             </div>
           ) : ev ? (

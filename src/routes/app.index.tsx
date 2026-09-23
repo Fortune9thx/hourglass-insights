@@ -9,13 +9,13 @@ import {
   Metric,
   PoolBar,
   Skeleton,
-  Sparkline,
   StatusPill,
   useNow,
 } from "@/components/primacy/ui";
 import { primacy } from "@/lib/primacy/client";
 import { LANES, laneById } from "@/lib/primacy/config";
 import { countdown, gen, windowLabel } from "@/lib/primacy/format";
+import { useWriteGate } from "@/lib/primacy/useWriteGate";
 import type { MarketState } from "@/lib/primacy/types";
 
 export const Route = createFileRoute("/app/")({
@@ -40,6 +40,7 @@ function Board() {
   const [lane, setLane] = useState<string>("all");
   const [state, setState] = useState<(typeof STATES)[number]>("All");
   const now = useNow();
+  const writeGate = useWriteGate();
 
   const stats = useQuery({ queryKey: ["stats"], queryFn: () => primacy.getStats() });
   const markets = useQuery({
@@ -61,7 +62,9 @@ function Board() {
         sub="USDT-M index return, completed UTC hour."
         action={
           <Link to="/app/create">
-            <Button>Create hour</Button>
+            <Button disabled={!writeGate.canWrite} reason={writeGate.reason}>
+              Create hour
+            </Button>
           </Link>
         }
       />
@@ -69,16 +72,14 @@ function Board() {
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <Metric
           label="GEN in play"
-          value={stats.data ? gen(stats.data.genInPlay, 0) : "—"}
+          value={stats.data ? gen(stats.data.genInPlay, 0) : "0"}
           sub="open and upcoming pools"
-        >
-          {stats.data ? <Sparkline values={stats.data.sparkline} /> : <Skeleton className="h-10" />}
-        </Metric>
-        <Metric label="Open hours" value={stats.data?.openHours ?? "—"} sub="accepting stakes" />
-        <Metric label="Settled 24h" value={stats.data?.settled24h ?? "—"} sub="2-of-3 reached" />
+        />
+        <Metric label="Open hours" value={stats.data?.openHours ?? 0} sub="accepting stakes" />
+        <Metric label="Settled 24h" value={stats.data?.settled24h ?? 0} sub="2-of-3 reached" />
         <Metric
           label="Inconclusive 24h"
-          value={stats.data?.inconclusive24h ?? "—"}
+          value={stats.data?.inconclusive24h ?? 0}
           sub="stakes returned"
         />
       </div>
@@ -133,14 +134,20 @@ function Board() {
               </div>
             ))}
           </div>
+        ) : markets.isError ? (
+          <div className="flex min-h-[480px] flex-col items-center justify-center gap-2 px-6 text-center">
+            <p className="text-[15px] text-mute">Could not read the board from Studio Next.</p>
+            <p className="text-[13px] text-mute">
+              {markets.error instanceof Error ? markets.error.message : "Unknown error."}
+            </p>
+          </div>
         ) : rows.length === 0 ? (
           <div className="flex min-h-[480px] flex-col items-center justify-center gap-4 px-6 text-center">
-            <p className="text-[15px] text-mute">
-              No open hour in this lane. Next creatable window is{" "}
-              <span className="font-mono text-ink">15:00 UTC</span>.
-            </p>
+            <p className="text-[15px] text-mute">No hours on chain yet.</p>
             <Link to="/app/create">
-              <Button>Create hour</Button>
+              <Button disabled={!writeGate.canWrite} reason={writeGate.reason}>
+                Create hour
+              </Button>
             </Link>
           </div>
         ) : (

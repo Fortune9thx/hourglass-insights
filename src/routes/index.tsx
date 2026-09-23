@@ -1,10 +1,10 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { Button, Card, SectionLabel } from "@/components/primacy/ui";
 import { MarketTicket } from "@/components/primacy/MarketTicket";
 import { Footer } from "@/components/primacy/Footer";
 import { ConnectButton } from "@/components/primacy/ConnectButton";
-import { DemoBanner } from "@/components/primacy/AppShell";
-import { MOCK_MARKETS } from "@/lib/primacy/mock";
+import { primacy } from "@/lib/primacy/client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -51,14 +51,51 @@ const FEATURES = [
   },
 ];
 
+/** No live board entry to show (not deployed, no code yet, or genuinely
+ * empty book) -- an inert placeholder, structurally the same card shape,
+ * every value dashed. No fabricated pools or bps. */
+function InertTicket() {
+  return (
+    <Card className="w-full">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <SectionLabel>—</SectionLabel>
+          <div className="mt-1 font-display text-xl">— UTC</div>
+          <div className="mt-1 text-[13px] text-mute">USDT-M index return, completed UTC hour</div>
+        </div>
+        <span className="inline-flex items-center rounded-full bg-paper px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-mute">
+          UNDEPLOYED
+        </span>
+      </div>
+      <div className="mt-6 space-y-4">
+        {["—", "—", "—"].map((_, i) => (
+          <div key={i} className="space-y-2">
+            <div className="flex items-baseline justify-between">
+              <span className="font-mono text-[13px] text-mute">—</span>
+              <span className="flex items-baseline gap-4">
+                <span className="font-mono text-[13px] text-mute">— GEN</span>
+                <span className="font-mono text-[13px] text-mute">—</span>
+              </span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-paper" />
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 flex items-center gap-2 border-t border-line pt-4">
+        <span className="font-mono text-[11px] text-mute">No contract deployed yet</span>
+        <span className="ml-auto font-mono text-[11px] text-mute">—/3 votes</span>
+      </div>
+    </Card>
+  );
+}
+
 function Marketing() {
-  const featured =
-    MOCK_MARKETS.find((m) => m.lane === "crypto-equity-proxies" && m.state === "SETTLED") ??
-    MOCK_MARKETS[0]!;
+  const boardQuery = useQuery({ queryKey: ["board"], queryFn: () => primacy.getBoard() });
+  const board = boardQuery.data ?? [];
+  const featured = board.find((m) => m.state === "OPEN") ?? board[board.length - 1];
 
   return (
     <div className="flex min-h-screen flex-col bg-paper">
-      <DemoBanner />
       <header className="border-b border-line">
         <div className="mx-auto flex h-16 max-w-[1200px] items-center gap-6 px-8">
           <Link to="/" className="font-display text-lg">
@@ -98,7 +135,7 @@ function Marketing() {
             </Link>
           </div>
         </div>
-        <MarketTicket market={featured} />
+        {featured ? <MarketTicket market={featured} /> : <InertTicket />}
       </section>
 
       <section className="bg-band text-band-text">
