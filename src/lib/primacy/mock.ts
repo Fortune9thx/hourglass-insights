@@ -38,7 +38,8 @@ function buildEvidence(id: string, symbols: string[], state: MarketState): Venue
     const abstain = state === "INCONCLUSIVE" ? i === 2 : r > 0.88;
     const open = 100 + r * 40;
     const b = (rand(`${id}-${venue}-b`) - 0.45) * 90;
-    const winnerIdx = state === "INCONCLUSIVE" ? i % symbols.length : Math.floor(rand(`${id}-w`) * 3);
+    const winnerIdx =
+      state === "INCONCLUSIVE" ? i % symbols.length : Math.floor(rand(`${id}-w`) * 3);
     return {
       venue,
       vote: abstain ? null : (symbols[winnerIdx] ?? symbols[0]!),
@@ -78,9 +79,7 @@ function buildMarket(laneIndex: number, hourOffset: number): Market {
   const evidence = buildEvidence(id, lane.symbols, state);
   const votes = evidence.filter((e) => e.vote).length;
   const winner =
-    state === "SETTLED"
-      ? (evidence.find((e) => e.vote)?.vote ?? lane.symbols[0]!)
-      : null;
+    state === "SETTLED" ? (evidence.find((e) => e.vote)?.vote ?? lane.symbols[0]!) : null;
 
   return {
     id,
@@ -166,7 +165,9 @@ export const MOCK_ACTIVITY: ActivityEvent[] = MOCK_MARKETS.filter(
       lane: m.lane,
       action,
       verdict,
-      tx: `0x${Math.abs(Math.floor(rand(`${m.id}-tx`) * 1e16)).toString(16).padStart(40, "a")}`,
+      tx: `0x${Math.abs(Math.floor(rand(`${m.id}-tx`) * 1e16))
+        .toString(16)
+        .padStart(40, "a")}`,
       detail:
         action === "SETTLE"
           ? `${voted.length} venues named ${m.winner}. ${

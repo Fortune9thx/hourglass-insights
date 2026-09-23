@@ -11,9 +11,7 @@ export function Card({
   className?: string;
   padded?: boolean;
 }) {
-  return (
-    <div className={cn("card-surface", padded && "p-6", className)}>{children}</div>
-  );
+  return <div className={cn("card-surface", padded && "p-6", className)}>{children}</div>;
 }
 
 type Variant = "primary" | "accent" | "ghost" | "outline";
@@ -24,7 +22,7 @@ export function Button({
   className,
   children,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; reason?: string }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; reason?: string | undefined }) {
   const base =
     "inline-flex h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40";
   const styles: Record<Variant, string> = {
@@ -44,10 +42,7 @@ export function Button({
   );
 }
 
-export function Input({
-  className,
-  ...props
-}: React.InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}

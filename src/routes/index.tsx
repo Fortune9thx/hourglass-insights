@@ -150,7 +150,10 @@ function Marketing() {
             </p>
             <div className="mt-auto pt-6">
               <Link to="/app/create">
-                <Button variant="outline" className="border-band-text/25 bg-transparent text-band-text hover:bg-band-text/10">
+                <Button
+                  variant="outline"
+                  className="border-band-text/25 bg-transparent text-band-text hover:bg-band-text/10"
+                >
                   Create hour
                 </Button>
               </Link>

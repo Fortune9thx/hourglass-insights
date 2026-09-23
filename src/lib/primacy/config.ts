@@ -1,19 +1,26 @@
-import type { Lane } from "./types";
+import type { ContractLaneId, Lane, LaneId } from "./types";
 
-export const CHAIN_ID = 61997;
-export const CHAIN_ID_HEX = "0xf22d";
+export const CHAIN_ID = Number(import.meta.env["VITE_GENLAYER_CHAIN_ID"] ?? 61997);
+export const CHAIN_ID_HEX = `0x${CHAIN_ID.toString(16)}`;
 export const CHAIN_NAME = "Studio Next";
-export const RPC_URL = "https://studio-dev.genlayer.com/api";
-export const EXPLORER_URL = "https://explorer-studio-dev.genlayer.com";
+export const CHAIN_FULL_NAME =
+  (import.meta.env["VITE_GENLAYER_CHAIN_NAME"] as string | undefined) ?? "GenLayer Studio Next";
+export const RPC_URL =
+  (import.meta.env["VITE_GENLAYER_RPC_URL"] as string | undefined) ??
+  "https://studio-dev.genlayer.com/api";
+export const EXPLORER_URL =
+  (import.meta.env["VITE_EXPLORER"] as string | undefined) ??
+  "https://explorer-studio-dev.genlayer.com";
 
+// Vite, not Next.js -- import.meta.env.VITE_*, never process.env.NEXT_PUBLIC_*.
 export const CONTRACT_ADDRESS: string | null =
-  (import.meta.env["VITE_PRIMACY_CONTRACT_ADDRESS"] as string | undefined) ?? null;
+  (import.meta.env["VITE_CONTRACT_ADDRESS"] as string | undefined) || null;
 
 export const HAS_CONTRACT = Boolean(CONTRACT_ADDRESS);
 
 export const ADD_CHAIN_PARAMS = {
   chainId: CHAIN_ID_HEX,
-  chainName: `GenLayer ${CHAIN_NAME}`,
+  chainName: CHAIN_FULL_NAME,
   nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
   rpcUrls: [RPC_URL],
   blockExplorerUrls: [EXPLORER_URL],
@@ -24,6 +31,22 @@ export const VENUES = [
   { id: "bitget" as const, label: "Bitget" },
   { id: "gate" as const, label: "Gate" },
 ];
+
+/**
+ * UI-facing lane ids stay kebab-case (route/query-string friendly); the
+ * real contract's lane_id is the SCREAMING_SNAKE string Primacy.py's
+ * LANES dict actually uses. Every contract call/response crosses this
+ * boundary exactly once, in client.ts.
+ */
+export const CONTRACT_LANE_ID: Record<LaneId, ContractLaneId> = {
+  "crypto-equity-proxies": "CRYPTO_EQUITY_PROXIES",
+  majors: "MAJORS",
+};
+
+export const UI_LANE_ID: Record<ContractLaneId, LaneId> = {
+  CRYPTO_EQUITY_PROXIES: "crypto-equity-proxies",
+  MAJORS: "majors",
+};
 
 export const LANES: Lane[] = [
   {

@@ -7,10 +7,12 @@ interface Eip1193 {
   removeListener?: (event: string, cb: (...args: unknown[]) => void) => void;
 }
 
-function provider(): Eip1193 | null {
+export function getInjectedProvider(): Eip1193 | null {
   if (typeof window === "undefined") return null;
   return (window as unknown as { ethereum?: Eip1193 }).ethereum ?? null;
 }
+
+const provider = getInjectedProvider;
 
 export function useWallet() {
   const [address, setAddress] = useState<string | null>(null);
@@ -69,9 +71,14 @@ export function useWallet() {
     const p = provider();
     if (!p) return;
     try {
-      await p.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CHAIN_ID_HEX }] });
+      await p.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: CHAIN_ID_HEX }],
+      });
     } catch {
-      await p.request({ method: "wallet_addEthereumChain", params: [ADD_CHAIN_PARAMS] }).catch(() => {});
+      await p
+        .request({ method: "wallet_addEthereumChain", params: [ADD_CHAIN_PARAMS] })
+        .catch(() => {});
     }
     if (address) await refresh(address);
   }, [address, refresh]);

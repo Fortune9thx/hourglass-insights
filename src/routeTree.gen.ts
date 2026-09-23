@@ -12,8 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as AppActivityRouteImport } from './routes/app.activity'
+import { Route as AppCreateRouteImport } from './routes/app.create'
 import { Route as AppLanesRouteImport } from './routes/app.lanes'
 import { Route as AppPortfolioRouteImport } from './routes/app.portfolio'
+import { Route as AppMIdRouteImport } from './routes/app.m.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -30,6 +33,16 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppActivityRoute = AppActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCreateRoute = AppCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppLanesRoute = AppLanesRouteImport.update({
   id: '/lanes',
   path: '/lanes',
@@ -40,34 +53,72 @@ const AppPortfolioRoute = AppPortfolioRouteImport.update({
   path: '/portfolio',
   getParentRoute: () => AppRoute,
 } as any)
+const AppMIdRoute = AppMIdRouteImport.update({
+  id: '/m/$id',
+  path: '/m/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/activity': typeof AppActivityRoute
+  '/app/create': typeof AppCreateRoute
   '/app/lanes': typeof AppLanesRoute
   '/app/portfolio': typeof AppPortfolioRoute
   '/app/': typeof AppIndexRoute
+  '/app/m/$id': typeof AppMIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/app/activity': typeof AppActivityRoute
+  '/app/create': typeof AppCreateRoute
   '/app/lanes': typeof AppLanesRoute
   '/app/portfolio': typeof AppPortfolioRoute
   '/app': typeof AppIndexRoute
+  '/app/m/$id': typeof AppMIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/activity': typeof AppActivityRoute
+  '/app/create': typeof AppCreateRoute
   '/app/lanes': typeof AppLanesRoute
   '/app/portfolio': typeof AppPortfolioRoute
   '/app/': typeof AppIndexRoute
+  '/app/m/$id': typeof AppMIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/app/lanes' | '/app/portfolio' | '/app/'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/app/activity'
+    | '/app/create'
+    | '/app/lanes'
+    | '/app/portfolio'
+    | '/app/'
+    | '/app/m/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app/lanes' | '/app/portfolio' | '/app'
-  id: '__root__' | '/' | '/app' | '/app/lanes' | '/app/portfolio' | '/app/'
+  to:
+    | '/'
+    | '/app/activity'
+    | '/app/create'
+    | '/app/lanes'
+    | '/app/portfolio'
+    | '/app'
+    | '/app/m/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/app'
+    | '/app/activity'
+    | '/app/create'
+    | '/app/lanes'
+    | '/app/portfolio'
+    | '/app/'
+    | '/app/m/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -98,6 +149,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/activity': {
+      id: '/app/activity'
+      path: '/activity'
+      fullPath: '/app/activity'
+      preLoaderRoute: typeof AppActivityRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/create': {
+      id: '/app/create'
+      path: '/create'
+      fullPath: '/app/create'
+      preLoaderRoute: typeof AppCreateRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/lanes': {
       id: '/app/lanes'
       path: '/lanes'
@@ -112,19 +177,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPortfolioRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/m/$id': {
+      id: '/app/m/$id'
+      path: '/m/$id'
+      fullPath: '/app/m/$id'
+      preLoaderRoute: typeof AppMIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppActivityRoute: typeof AppActivityRoute
+  AppCreateRoute: typeof AppCreateRoute
   AppLanesRoute: typeof AppLanesRoute
   AppPortfolioRoute: typeof AppPortfolioRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppMIdRoute: typeof AppMIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppActivityRoute: AppActivityRoute,
+  AppCreateRoute: AppCreateRoute,
   AppLanesRoute: AppLanesRoute,
   AppPortfolioRoute: AppPortfolioRoute,
   AppIndexRoute: AppIndexRoute,
+  AppMIdRoute: AppMIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

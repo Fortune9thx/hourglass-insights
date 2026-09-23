@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/primacy/AppShell";
 import {
   Button,
@@ -34,6 +34,7 @@ export const Route = createFileRoute("/app/m/$id")({
 function Ticket() {
   const { id } = Route.useParams();
   const now = useNow();
+  const queryClient = useQueryClient();
   const [venue, setVenue] = useState(VENUES[0]!.id);
   const [amount, setAmount] = useState("");
   const [side, setSide] = useState<string | null>(null);
@@ -41,6 +42,29 @@ function Ticket() {
 
   const q = useQuery({ queryKey: ["market", id], queryFn: () => primacy.getMarket(id) });
   const m = q.data;
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ["market", id] });
+    void queryClient.invalidateQueries({ queryKey: ["markets"] });
+  };
+
+  const settleMutation = useMutation({
+    mutationFn: () => primacy.settleMarket({ marketId: id }),
+    onSuccess: () => {
+      setErr(null);
+      invalidate();
+    },
+    onError: (e: Error) => setErr(e.message),
+  });
+
+  const reclaimMutation = useMutation({
+    mutationFn: () => primacy.reclaimBonds({ marketId: id }),
+    onSuccess: () => {
+      setErr(null);
+      invalidate();
+    },
+    onError: (e: Error) => setErr(e.message),
+  });
 
   if (q.isPending) {
     return (
@@ -82,7 +106,8 @@ function Ticket() {
   const total = m.legs.reduce((s, l) => s + l.pool, 0) || 1;
   const started = now !== null && now >= m.startsAt;
   const expired = now !== null && now >= m.endsAt;
-  const bettingClosed = started || m.state !== "UPCOMING" ? m.state !== "UPCOMING" && started : false;
+  const bettingClosed =
+    started || m.state !== "UPCOMING" ? m.state !== "UPCOMING" && started : false;
   const canBet = m.state === "OPEN" || m.state === "UPCOMING" ? !started : false;
   const ev = m.evidence.find((e) => e.venue === venue);
 
@@ -119,10 +144,24 @@ function Ticket() {
           expired && m.state === "OPEN" ? (
             <Button
               variant="accent"
-              disabled={!HAS_CONTRACT}
-              reason="Contract not set on Studio Next"
+              disabled={!HAS_CONTRACT || settleMutation.isPending}
+              reason={
+                !HAS_CONTRACT ? "Contract not set on Studio Next" : "Posts a 1 GEN settle bond"
+              }
+              onClick={() => settleMutation.mutate()}
             >
-              Settle hour
+              {settleMutation.isPending ? "Settling…" : "Settle hour"}
+            </Button>
+          ) : m.state === "SETTLED" || m.state === "INCONCLUSIVE" ? (
+            <Button
+              variant="outline"
+              disabled={!HAS_CONTRACT || reclaimMutation.isPending}
+              reason={
+                !HAS_CONTRACT ? "Contract not set on Studio Next" : "Returns any bond owed to you"
+              }
+              onClick={() => reclaimMutation.mutate()}
+            >
+              {reclaimMutation.isPending ? "Reclaiming…" : "Reclaim bonds"}
             </Button>
           ) : null
         }
@@ -149,7 +188,11 @@ function Ticket() {
                       <span>{gen(leg.pool)} GEN</span>
                       <span className="text-mute">{pct(share)} implied</span>
                       {started ? (
-                        <span className={leg.bps === null ? "text-mute" : leg.bps >= 0 ? "text-up" : "text-down"}>
+                        <span
+                          className={
+                            leg.bps === null ? "text-mute" : leg.bps >= 0 ? "text-up" : "text-down"
+                          }
+                        >
                           {bps(leg.bps)}
                         </span>
                       ) : null}
@@ -205,7 +248,8 @@ function Ticket() {
           </div>
           {err ? <p className="mt-3 text-[13px] text-down">{err}</p> : null}
           <p className="mt-3 text-[13px] text-mute">
-            One symbol per wallet. Switching is rejected. Min 1 GEN. Betting closes at the hour start.
+            One symbol per wallet. Switching is rejected. Min 1 GEN. Betting closes at the hour
+            start.
           </p>
           {bettingClosed ? (
             <p className="mt-1 font-mono text-[12px] text-warn">Betting closed for this hour.</p>

@@ -117,7 +117,7 @@ function CreateHour() {
               onClick={() => {
                 setErr(null);
                 primacy
-                  .createHour({ lane: lane!, startsAt: startsAt! })
+                  .createMarket({ lane: lane!, startsAt: startsAt! })
                   .catch((e: Error) => setErr(e.message));
               }}
             >

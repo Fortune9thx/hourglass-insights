@@ -14,7 +14,9 @@ export function MarketTicket({ market }: { market: Market }) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <SectionLabel>{lane.name}</SectionLabel>
-          <div className="mt-1 font-display text-xl">{windowLabel(market.startsAt, market.endsAt)}</div>
+          <div className="mt-1 font-display text-xl">
+            {windowLabel(market.startsAt, market.endsAt)}
+          </div>
           <div className="mt-1 text-[13px] text-mute">USDT-M index return, completed UTC hour</div>
         </div>
         <StatusPill state={market.state} />
@@ -53,9 +55,7 @@ export function MarketTicket({ market }: { market: Market }) {
             {v.label}
           </button>
         ))}
-        <span className="ml-auto font-mono text-[11px] text-mute">
-          {market.votes}/3 votes
-        </span>
+        <span className="ml-auto font-mono text-[11px] text-mute">{market.votes}/3 votes</span>
       </div>
     </Card>
   );

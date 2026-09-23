@@ -12,7 +12,10 @@ export const Route = createFileRoute("/app/lanes")({
         content: "Instrument classes, locked venues and the eleven settlement rules of PRIMACY.",
       },
       { property: "og:title", content: "Lanes and constitution — PRIMACY" },
-      { property: "og:description", content: "Instrument classes, locked venues, settlement rules." },
+      {
+        property: "og:description",
+        content: "Instrument classes, locked venues, settlement rules.",
+      },
     ],
   }),
   component: Lanes,

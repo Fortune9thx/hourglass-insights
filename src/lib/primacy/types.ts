@@ -1,6 +1,40 @@
 export type LaneId = "crypto-equity-proxies" | "majors";
 
+/** The real contract's lane_id -- Primacy.py's LANES dict keys. See config.ts's CONTRACT_LANE_ID/UI_LANE_ID maps. */
+export type ContractLaneId = "CRYPTO_EQUITY_PROXIES" | "MAJORS";
+
 export type MarketState = "OPEN" | "UPCOMING" | "SETTLED" | "INCONCLUSIVE";
+
+export interface Constitution {
+  lanes: Record<ContractLaneId, string[]>;
+  venues: string[];
+  hourSeconds: number;
+  minLeadSeconds: number;
+  minBetWei: string;
+  createBondWei: string;
+  settleBondWei: string;
+  feeBps: number;
+  settleWindowSeconds: number;
+  bpsTol: number;
+  maxOpenMarketsPerCreator: number;
+  maxPageSize: number;
+  instrumentLabel: string;
+  treasury: string;
+}
+
+export interface ContractConfig {
+  treasury: string;
+  nextMarketId: number;
+  totalMarkets: number;
+}
+
+export interface BettingState {
+  state: MarketState;
+  isOpen: boolean;
+  secondsUntilClose: number;
+  mySymbol: string | null;
+  myStake: number;
+}
 
 export type VenueId = "binance" | "bitget" | "gate";
 

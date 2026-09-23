@@ -16,7 +16,7 @@ export const Route = createFileRoute("/app/activity")({
       { property: "og:description", content: "Settlements, refunds and keeper actions." },
     ],
   }),
-  component: Activity;
+  component: Activity,
 });
 
 function Activity() {

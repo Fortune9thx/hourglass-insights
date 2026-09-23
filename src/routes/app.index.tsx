@@ -22,7 +22,10 @@ export const Route = createFileRoute("/app/")({
   head: () => ({
     meta: [
       { title: "Board — PRIMACY" },
-      { name: "description", content: "Every open, upcoming and settled primacy hour on Studio Next." },
+      {
+        name: "description",
+        content: "Every open, upcoming and settled primacy hour on Studio Next.",
+      },
       { property: "og:title", content: "Board — PRIMACY" },
       { property: "og:description", content: "Open, upcoming and settled primacy hours." },
     ],
@@ -41,7 +44,7 @@ function Board() {
   const stats = useQuery({ queryKey: ["stats"], queryFn: () => primacy.getStats() });
   const markets = useQuery({
     queryKey: ["markets", lane, state],
-    queryFn: () => primacy.listMarkets({ lane: lane as never, state }),
+    queryFn: () => primacy.getMarkets({ lane: lane as never, state }),
   });
 
   const rows = (markets.data ?? []).filter((m) =>
@@ -105,7 +108,9 @@ function Board() {
               key={s}
               onClick={() => setState(s)}
               className={`h-9 rounded-full px-4 text-[13px] transition-colors ${
-                state === s ? "bg-ink text-surface" : "border border-line bg-surface text-mute hover:text-ink"
+                state === s
+                  ? "bg-ink text-surface"
+                  : "border border-line bg-surface text-mute hover:text-ink"
               }`}
             >
               {s}
@@ -155,7 +160,9 @@ function Board() {
                   params={{ id: m.id }}
                   className="flex h-14 items-center gap-4 px-6 transition-colors hover:bg-surface-2"
                 >
-                  <span className="w-[170px] shrink-0 truncate text-sm">{laneById(m.lane).name}</span>
+                  <span className="w-[170px] shrink-0 truncate text-sm">
+                    {laneById(m.lane).name}
+                  </span>
                   <span className="w-[200px] shrink-0">
                     <span className="font-mono text-[13px]">
                       {windowLabel(m.startsAt, m.endsAt)}

@@ -4,12 +4,16 @@ import { ConnectButton } from "./ConnectButton";
 import { Footer } from "./Footer";
 import { CHAIN_ID, CHAIN_NAME, HAS_CONTRACT } from "@/lib/primacy/config";
 
-const NAV = [
+const NAV: {
+  to: "/app" | "/app/portfolio" | "/app/activity" | "/app/lanes";
+  label: string;
+  exact?: boolean;
+}[] = [
   { to: "/app", label: "Board", exact: true },
   { to: "/app/portfolio", label: "Portfolio" },
   { to: "/app/activity", label: "Activity" },
   { to: "/app/lanes", label: "Lanes" },
-] as const;
+];
 
 export function DemoBanner() {
   if (HAS_CONTRACT) return null;
