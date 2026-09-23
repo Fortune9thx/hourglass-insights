@@ -50,6 +50,7 @@ type ReadArgs = Parameters<PrimacyGenLayerClient["readContract"]>[0];
 type WriteArgs = Parameters<PrimacyGenLayerClient["writeContract"]>[0];
 type ContractAddress = ReadArgs["address"];
 type Kwargs = NonNullable<ReadArgs["kwargs"]>;
+type TxHash = Parameters<PrimacyGenLayerClient["getTransaction"]>[0]["hash"];
 
 const CHAIN_CONFIG = studioDevnet as unknown as ChainConfig;
 
@@ -148,27 +149,62 @@ async function readView<T>(functionName: string, kwargs: Kwargs = {}): Promise<T
   }) as Promise<T>;
 }
 
+type PrimacyTransaction = Awaited<ReturnType<PrimacyGenLayerClient["getTransaction"]>>;
+
 async function writeContract(
   functionName: string,
   kwargs: Kwargs,
   valueWei: bigint,
 ): Promise<TxResult> {
   const address = requireContractAddress();
+  const client = await getWriteClient();
+  const writeArgs: WriteArgs = {
+    address,
+    functionName,
+    args: [],
+    kwargs,
+    value: valueWei,
+  };
+
+  let hash: TxHash;
   try {
-    const client = await getWriteClient();
-    const writeArgs: WriteArgs = {
-      address,
-      functionName,
-      args: [],
-      kwargs,
-      value: valueWei,
-    };
-    const hash = (await client.writeContract(writeArgs)) as string;
-    return { hash, status: "submitted" };
+    hash = (await client.writeContract(writeArgs)) as TxHash;
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);
     throw new PrimacyError(describePrimacyError(raw));
   }
+
+  // A write's returned hash is not itself proof of success -- "reached a
+  // terminal status" and "the call actually succeeded" are two different
+  // claims, and every real fund-moving write here (claim/claimRefund/
+  // reclaimBonds all pay the caller; settleMarket's outcome gates those
+  // later claims) needs the stronger one. Wait for genuine FINALIZED, not
+  // just ACCEPTED/"decided" -- a value transfer is not reliably final
+  // before that. Then require txExecutionResultName === "FINISHED_WITH_RETURN"
+  // as an explicit WHITELIST: never infer success from "not the one known
+  // failure value," since a missing/undefined/NOT_VOTED result would
+  // silently pass a blacklist check. See Desktop/primacy's
+  // genlayer-master-audit-prompt.md items 6/28/40/90/131/146/164/171 --
+  // this exact class of bug (status-alone success detection) has caused
+  // real steward rejections on prior projects.
+  let tx: PrimacyTransaction | null = null;
+  try {
+    tx = await client.waitForTransactionReceipt({
+      hash,
+      waitUntil: "finalized",
+      retries: 120,
+      interval: 5000,
+    });
+  } catch {
+    tx = await client.getTransaction({ hash }).catch(() => null);
+  }
+
+  if (tx?.txExecutionResultName !== "FINISHED_WITH_RETURN") {
+    const detail = tx?.txExecutionResultName ?? tx?.statusName ?? "unknown, no receipt";
+    throw new PrimacyError(describePrimacyError(`transaction did not succeed (${detail})`));
+  }
+
+  return { hash, status: tx.lifecycle?.state === "finalized" ? "finalized" : "accepted" };
 }
 
 // ---------------------------------------------------------------------------
