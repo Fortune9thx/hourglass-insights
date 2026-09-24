@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { WalletProvider } from "../lib/primacy/useWallet";
 
 function NotFoundComponent() {
   return (
@@ -130,8 +131,15 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      {/* One wallet instance for the whole app -- both the landing page's
+          own ConnectButton and every /app/* page must share the exact same
+          connection state, or connecting on one and navigating to the
+          other looks disconnected again. See useWallet.tsx's own comment
+          for the bug this fixes. */}
+      <WalletProvider>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+      </WalletProvider>
     </QueryClientProvider>
   );
 }

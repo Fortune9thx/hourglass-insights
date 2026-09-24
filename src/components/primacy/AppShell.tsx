@@ -23,7 +23,7 @@ const LiveStatusContext = createContext<LiveStatus | undefined>(undefined);
 /** The single hook every page/component uses to know whether the
  * contract is really live -- undefined while the first check is still
  * in flight. Never assume live just because an address is configured;
- * this reflects a real `eth_getCode` result. */
+ * this reflects a real `gen_getContractSchema` result. */
 export function useLiveStatus(): LiveStatus | undefined {
   return useContext(LiveStatusContext);
 }
