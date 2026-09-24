@@ -26,14 +26,35 @@ export function ConnectButton() {
     );
   }
 
+  if (!w.hasProvider) {
+    return (
+      <a
+        href="https://metamask.io/download"
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex h-9 items-center rounded-full border border-line bg-surface px-4 font-mono text-[12px] text-mute hover:text-ink"
+        title="No wallet extension found in this browser"
+      >
+        Install a wallet
+      </a>
+    );
+  }
+
   return (
-    <Button
-      onClick={() => void w.connect()}
-      disabled={w.connecting}
-      reason="Waiting on the wallet prompt"
-      className="h-9 px-4"
-    >
-      {w.connecting ? "Connecting…" : "Connect"}
-    </Button>
+    <div className="flex items-center gap-2">
+      {w.error ? (
+        <span className="max-w-[220px] truncate font-mono text-[11px] text-down" title={w.error}>
+          {w.error}
+        </span>
+      ) : null}
+      <Button
+        onClick={() => void w.connect()}
+        disabled={w.connecting}
+        reason="Waiting on the wallet prompt"
+        className="h-9 px-4"
+      >
+        {w.connecting ? "Connecting…" : "Connect"}
+      </Button>
+    </div>
   );
 }

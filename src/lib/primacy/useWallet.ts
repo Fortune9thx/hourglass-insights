@@ -1,18 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ADD_CHAIN_PARAMS, CHAIN_ID, CHAIN_ID_HEX } from "./config";
-
-interface Eip1193 {
-  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-  on?: (event: string, cb: (...args: unknown[]) => void) => void;
-  removeListener?: (event: string, cb: (...args: unknown[]) => void) => void;
-}
-
-export function getInjectedProvider(): Eip1193 | null {
-  if (typeof window === "undefined") return null;
-  return (window as unknown as { ethereum?: Eip1193 }).ethereum ?? null;
-}
-
-const provider = getInjectedProvider;
+import { discoverProviders, getSelectedProvider, type Eip1193 } from "./walletProvider";
 
 export function useWallet() {
   const [address, setAddress] = useState<string | null>(null);
@@ -23,8 +11,17 @@ export function useWallet() {
   const [hasProvider, setHasProvider] = useState(false);
 
   useEffect(() => {
-    setHasProvider(Boolean(provider()));
+    let cancelled = false;
+    void discoverProviders().then((found) => {
+      if (cancelled) return;
+      setHasProvider(found.length > 0);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  const provider = useCallback((): Eip1193 | null => getSelectedProvider(), []);
 
   const refresh = useCallback(async (addr: string) => {
     const p = provider();

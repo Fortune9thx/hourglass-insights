@@ -24,7 +24,7 @@
 import { createClient } from "genlayer-js";
 import { studioDevnet } from "genlayer-js/chains";
 import { CHAIN_ID, CONTRACT_ADDRESS, CONTRACT_LANE_ID, HAS_CONTRACT, UI_LANE_ID } from "./config";
-import { getInjectedProvider } from "./useWallet";
+import { discoverProviders, getSelectedProvider } from "./walletProvider";
 import type {
   ActivityEvent,
   BettingState,
@@ -122,7 +122,16 @@ function getReadClient() {
 }
 
 async function getWriteClient() {
-  const provider = getInjectedProvider();
+  let provider = getSelectedProvider();
+  if (!provider) {
+    // useWallet's own discovery should already have run, but a write
+    // triggered before that effect settles (or in a context where
+    // useWallet never mounted) still needs the same shared provider --
+    // never a fresh, separately-discovered one, or this could silently
+    // sign with a different wallet than the one the user connected.
+    const found = await discoverProviders();
+    provider = found[0]?.provider ?? null;
+  }
   if (!provider) throw new PrimacyError("No injected wallet found in this browser.");
   const accounts = (await provider.request({ method: "eth_accounts" })) as string[];
   const account = accounts[0];
