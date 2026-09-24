@@ -17,8 +17,10 @@
  *   RPC call throws (or, for list reads, resolves to `[]`) -- it never
  *   falls back to fabricated data.
  * - `checkLiveStatus()` is the single source of truth for whether the
- *   configured address actually has code on-chain right now (a real
- *   `eth_getCode` call, not just "an address string is set") -- see
+ *   configured address actually has a real contract deployed right now
+ *   (a real `gen_getContractSchema` call, not just "an address string is
+ *   set" -- and not `eth_getCode`, which always returns "0x" for a GenVM
+ *   contract regardless of whether it's really deployed) -- see
  *   AppShell's `useLiveStatus()` for how the UI consumes this.
  */
 import { createClient } from "genlayer-js";
@@ -228,19 +230,19 @@ export async function checkLiveStatus(): Promise<LiveStatus> {
   if (!CONTRACT_ADDRESS) return "not_deployed";
   try {
     const client = getReadClient();
-    // eth_getCode is a real, confirmed-working method on Studio Dev's RPC
-    // (verified directly via curl), but genlayer-js@2.0.0-rc.1's `request`
-    // overloads only enumerate its own gen_/sim_ methods plus a handful of
-    // viem standard ones -- eth_getCode isn't among them in the .d.ts even
-    // though the server supports it. Cast through `never` rather than
-    // pretending it fits one of the declared overloads.
-    const request = client.request as (args: {
-      method: "eth_getCode";
-      params: [string, string];
-    }) => Promise<string>;
-    const code = await request({ method: "eth_getCode", params: [CONTRACT_ADDRESS, "latest"] });
-    return code && code !== "0x" ? "live" : "no_code";
-  } catch {
+    // eth_getCode is an EVM-compatibility method and always returns "0x"
+    // for a real GenVM Intelligent Contract -- confirmed directly against
+    // our own live, working, deployed contract (genlayer schema/call both
+    // succeed against it with real data, while eth_getCode on the exact
+    // same address returns "0x" every time). It is not a liveness signal
+    // on this network at all, for any contract. gen_getContractSchema is
+    // the GenVM-native equivalent: it only succeeds if real code actually
+    // exists at that address.
+    await client.getContractSchema(CONTRACT_ADDRESS as `0x${string}`);
+    return "live";
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err);
+    if (raw.toLowerCase().includes("not found")) return "no_code";
     return "rpc_down";
   }
 }
